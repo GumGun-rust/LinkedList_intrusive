@@ -10,16 +10,8 @@ use super::{
 };
 
 use core::{
-    marker::PhantomData,
     ptr::NonNull,
 };
-
-#[derive(Debug, Default)]
-pub(crate) enum direction {
-    #[default]
-    forward,
-    reversed,
-}
 
 pub struct LLIter<'a, T> {
     pub(crate) reference: &'a LinkedList<T>,

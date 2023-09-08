@@ -34,7 +34,7 @@ pub struct LinkedList<T> {
 
 impl<T> LinkedList<T> {
     
-    pub fn new(offset:usize) -> Self {
+    pub unsafe fn new(offset:usize) -> Self {
         Self{
             head:None,
             tail:None,
@@ -44,9 +44,12 @@ impl<T> LinkedList<T> {
         }
     }
     
-    pub fn insert(&mut self, node:NonNull<T>) {
+    pub fn insert(&mut self, node:NonNull<T>) -> Result<(), ()> {
         let mut anchor_nn = self.node_to_anchor(node);
         let anchor_mut = unsafe{anchor_nn.as_mut()};
+        if anchor_mut.prev.is_some() || anchor_mut.next.is_some() {
+            return Err(())
+        }
         match self.head {
             None => {
                 self.head = Some(anchor_nn);
@@ -65,6 +68,7 @@ impl<T> LinkedList<T> {
                 self.size += 1;
             }
         }
+        Ok(())
     }
     
 
@@ -164,7 +168,6 @@ impl<T> LinkedList<T> {
     pub fn anchor_to_node(&self, anchor:NonNull<LLAnchor>) -> NonNull<T> {
         let holder = unsafe{(anchor.as_ptr() as *mut i8).sub(self.offset)};
         unsafe{NonNull::new_unchecked(holder as *mut T)}
-        //todo!();
     }
 
     

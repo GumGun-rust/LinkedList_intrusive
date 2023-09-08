@@ -14,7 +14,7 @@ struct Holder {
 
 #[test]
 fn new() {
-    let mut list = LinkedList::<Holder>::new(offset_of!(Holder, anchor));
+    let mut list = unsafe{LinkedList::<Holder>::new(offset_of!(Holder, anchor))};
     
     println!("{}", offset_of!(Holder, anchor));
     println!("{}", offset_of!(Holder, value));
@@ -28,13 +28,13 @@ fn new() {
     current[1].value = 1;
     current[2].value = 2;
     //let node = NonNull::new(Box::into_raw(Box::new(Holder{value:1,..Holder::default()}))).expect("mem error");
-    let arr_ptr = unsafe{current.as_mut_ptr()};
+    let arr_ptr = current.as_mut_ptr();
     let node0 = unsafe{NonNull::new_unchecked(arr_ptr)};
     let node1 = unsafe{NonNull::new_unchecked(arr_ptr.add(1))};
-    list.insert(node1);
+    list.insert(node1).unwrap();
     
     let node2 = unsafe{NonNull::new_unchecked(arr_ptr.add(2))};
-    list.insert(node2);
+    list.insert(node2).unwrap();
     
     /*
     */
@@ -51,7 +51,7 @@ fn new() {
 
 #[test]
 fn iter_list() {
-    let mut list = LinkedList::<Holder>::new(offset_of!(Holder, anchor));
+    let mut list = unsafe{LinkedList::<Holder>::new(offset_of!(Holder, anchor))};
     
     let arr_holder:[Holder; 5] = Default::default();
     let mut arr = NonNull::new(Box::into_raw(Box::new(arr_holder))).expect("mem error");
@@ -62,19 +62,19 @@ fn iter_list() {
     current[1].value = 1;
     current[2].value = 2;
     current[3].value = 3;
-    let arr_ptr = unsafe{current.as_mut_ptr()};
+    let arr_ptr = current.as_mut_ptr();
     
     let node0 = unsafe{NonNull::new_unchecked(arr_ptr)};
-    list.insert(node0);
+    list.insert(node0).unwrap();
     
     let node1 = unsafe{NonNull::new_unchecked(arr_ptr.add(1))};
-    list.insert(node1);
+    list.insert(node1).unwrap();
     
     let node2 = unsafe{NonNull::new_unchecked(arr_ptr.add(2))};
-    list.insert(node2);
+    list.insert(node2).unwrap();
     
     let node3 = unsafe{NonNull::new_unchecked(arr_ptr.add(3))};
-    list.insert(node3);
+    list.insert(node3).unwrap();
     
 
     for elem in list.iter() {
