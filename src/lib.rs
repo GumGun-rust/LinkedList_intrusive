@@ -44,7 +44,7 @@ impl<T> LinkedList<T> {
         }
     }
     
-    pub fn insert(&mut self, node:NonNull<T>) -> Result<(), ()> {
+    pub fn append(&mut self, node:NonNull<T>) -> Result<(), ()> {
         let mut anchor_nn = self.node_to_anchor(node);
         let anchor_mut = unsafe{anchor_nn.as_mut()};
         if anchor_mut.prev.is_some() || anchor_mut.next.is_some() {

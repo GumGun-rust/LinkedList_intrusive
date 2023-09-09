@@ -31,13 +31,11 @@ fn new() {
     let arr_ptr = current.as_mut_ptr();
     let node0 = unsafe{NonNull::new_unchecked(arr_ptr)};
     let node1 = unsafe{NonNull::new_unchecked(arr_ptr.add(1))};
-    list.insert(node1).unwrap();
+    list.append(node1).unwrap();
     
     let node2 = unsafe{NonNull::new_unchecked(arr_ptr.add(2))};
-    list.insert(node2).unwrap();
+    list.append(node2).unwrap();
     
-    /*
-    */
     let get = list.get(1).unwrap();
     let get = unsafe{get.as_ref()};
     println!("value from get{:#?}", get);
@@ -65,16 +63,16 @@ fn iter_list() {
     let arr_ptr = current.as_mut_ptr();
     
     let node0 = unsafe{NonNull::new_unchecked(arr_ptr)};
-    list.insert(node0).unwrap();
+    list.append(node0).unwrap();
     
     let node1 = unsafe{NonNull::new_unchecked(arr_ptr.add(1))};
-    list.insert(node1).unwrap();
+    list.append(node1).unwrap();
     
     let node2 = unsafe{NonNull::new_unchecked(arr_ptr.add(2))};
-    list.insert(node2).unwrap();
+    list.append(node2).unwrap();
     
     let node3 = unsafe{NonNull::new_unchecked(arr_ptr.add(3))};
-    list.insert(node3).unwrap();
+    list.append(node3).unwrap();
     
 
     for elem in list.iter() {
