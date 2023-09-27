@@ -1,4 +1,6 @@
 #![no_std]
+#![feature(pointer_byte_offsets)]
+
 #[cfg(test)]
 mod tests;
 
@@ -58,22 +60,22 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
     
     pub fn insert_mem(&mut self, memory:NonNull<T>) -> Result<(), ()> {
         
-        let anchor = self.anchor_from_node(memory.as_ptr()) as *mut u8;//unsafe{(memory.as_ptr() as *mut u8).sub(OFFSET)};
-        let mut anchor_nn = unsafe{NonNull::new_unchecked(anchor as *mut LinkedListAnchor)};
+        let anchor = self.anchor_from_node(memory.as_ptr()) as *mut LinkedListAnchor;
+        let mut anchor_nn = unsafe{NonNull::new_unchecked(anchor)};
         let anchor_mut = unsafe{anchor_nn.as_mut()};
         
         if anchor_mut.next.is_some() || anchor_mut.prev.is_some() {
             return Err(());
         }
         
-        let relative_addr = self.rel_from_abs(anchor as *mut LinkedListAnchor);
+        let relative_addr = self.rel_from_abs(anchor);
         self.len += 1;
         
         match self.tail {
             Some(offset) => {
                 let mut pivot = unsafe{NonNull::new_unchecked(self.base.offset(offset) as *mut LinkedListAnchor)};
                 let pivot_mut = unsafe{pivot.as_mut()};
-                let ptr_diff = unsafe{(anchor).offset_from(pivot.as_ptr() as *mut u8)};
+                let ptr_diff = unsafe{anchor.byte_offset_from(pivot.as_ptr() as *mut u8)};
                 pivot_mut.next = Some(ptr_diff);
                 anchor_mut.prev = Some(-ptr_diff);
                 self.tail = Some(relative_addr);
@@ -102,14 +104,12 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
             None => {return Err(());}
         };
         
-        let mut pivot_anchor_u8 = unsafe{self.base.offset(pivot_offset)};
-        let mut pivot_anchor = pivot_anchor_u8 as *mut LinkedListAnchor;
+        let mut pivot_anchor = unsafe{self.base.byte_offset(pivot_offset)} as *mut LinkedListAnchor;
         let mut pivot_anchor_mut = unsafe{pivot_anchor.as_mut().expect("should be pointing to a node")};
         
         for _ in 0..index {
             pivot_offset = pivot_anchor_mut.next.expect("should be at least index size long to arrive to this point");
-            pivot_anchor_u8 = unsafe{pivot_anchor_u8.offset(pivot_offset)};
-            pivot_anchor = pivot_anchor_u8 as *mut LinkedListAnchor;
+            pivot_anchor = unsafe{pivot_anchor.byte_offset(pivot_offset)};
             pivot_anchor_mut = unsafe{pivot_anchor.as_mut().expect("should be pointing to a node")};
         }
         Ok(NonNull::new(self.node_from_anchor(pivot_anchor)).expect("should be pointing to a node"))
@@ -118,12 +118,12 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
 
     pub fn unlink(&mut self, node:NonNull<T>) {
         
-        let anchor_u8 = self.anchor_from_node(node.as_ptr()) as *mut u8;//unsafe{(memory.as_ptr() as *mut u8).sub(OFFSET)};
-        let anchor_mut = unsafe{NonNull::new_unchecked(anchor_u8 as *mut LinkedListAnchor).as_mut()};
+        let anchor = self.anchor_from_node(node.as_ptr());
+        let anchor_mut = unsafe{NonNull::new_unchecked(anchor).as_mut()};
         match (anchor_mut.prev, anchor_mut.next) {
             (Some(prev_offset), Some(next_offset)) => {
-                let prev_mut = unsafe{NonNull::new_unchecked(anchor_u8.offset(prev_offset) as *mut LinkedListAnchor).as_mut()};
-                let next_mut = unsafe{NonNull::new_unchecked(anchor_u8.offset(next_offset) as *mut LinkedListAnchor).as_mut()};
+                let prev_mut = unsafe{NonNull::new_unchecked(anchor.byte_offset(prev_offset)).as_mut()};
+                let next_mut = unsafe{NonNull::new_unchecked(anchor.byte_offset(next_offset)).as_mut()};
                 let prev_next_offset = prev_mut.next.expect("should not be the last element");
                 let next_prev_offset = next_mut.prev.expect("should not be the first element");
                 prev_mut.next = Some(prev_next_offset+next_offset);
@@ -131,18 +131,18 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
                 *anchor_mut = LinkedListAnchor::default();
             }
             (Some(prev_offset), None) => {
-                let prev_u8 = unsafe{anchor_u8.offset(prev_offset)};
-                let prev_mut = unsafe{NonNull::new_unchecked(prev_u8 as *mut LinkedListAnchor).as_mut()};
+                let prev = unsafe{anchor.byte_offset(prev_offset)};
+                let prev_mut = unsafe{NonNull::new_unchecked(prev).as_mut()};
                 prev_mut.next = None;
-                self.tail = unsafe{Some(prev_u8.offset_from(self.base))};
+                self.tail = unsafe{Some(prev.byte_offset_from(self.base))};
                 *anchor_mut = LinkedListAnchor::default();
                 
             }
             (None, Some(next_offset)) => {
-                let next_u8 = unsafe{anchor_u8.offset(next_offset)};
-                let next_mut = unsafe{NonNull::new_unchecked(next_u8 as *mut LinkedListAnchor).as_mut()};
+                let next = unsafe{anchor.byte_offset(next_offset)};
+                let next_mut = unsafe{NonNull::new_unchecked(next).as_mut()};
                 next_mut.prev = None;
-                self.head = unsafe{Some(next_u8.offset_from(self.base))};
+                self.head = unsafe{Some(next.byte_offset_from(self.base))};
                 *anchor_mut = LinkedListAnchor::default();
             }
             (None, None) => {
@@ -161,19 +161,18 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
     }
     
     fn rel_from_abs(&self, address:*mut LinkedListAnchor) -> isize {
-        unsafe{(address as *const u8).offset_from(self.base)}
+        unsafe{address.byte_offset_from(self.base)}
         
     }
     
     fn anchor_from_node(&self, node:*const T) -> *mut LinkedListAnchor {
-        (unsafe{(node as *mut u8).sub(OFFSET)}) as *mut LinkedListAnchor
+        (unsafe{node.byte_sub(OFFSET)}) as *mut LinkedListAnchor
     }
     
     
-    fn node_from_anchor(&self, node:*const LinkedListAnchor ) -> *mut T {
-        (unsafe{(node as *mut u8).add(OFFSET)}) as *mut T
+    fn node_from_anchor(&self, node:*const LinkedListAnchor) -> *mut T {
+        (unsafe{node.byte_add(OFFSET)}) as *mut T
     }
     
 }
-
 
