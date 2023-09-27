@@ -73,7 +73,7 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
         
         match self.tail {
             Some(offset) => {
-                let mut pivot = unsafe{NonNull::new_unchecked(self.base.offset(offset) as *mut LinkedListAnchor)};
+                let mut pivot = unsafe{NonNull::new_unchecked(self.base.byte_offset(offset) as *mut LinkedListAnchor)};
                 let pivot_mut = unsafe{pivot.as_mut()};
                 let ptr_diff = unsafe{anchor.byte_offset_from(pivot.as_ptr() as *mut u8)};
                 pivot_mut.next = Some(ptr_diff);
