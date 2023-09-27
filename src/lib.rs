@@ -13,6 +13,13 @@ use core::{
     marker::PhantomData,
 };
 
+#[derive(Debug, Clone, Copy)]
+enum BaseSaver {
+    Absolute,
+    Local(*mut u8),
+    Extern(*mut *mut u8),
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LinkedListAnchor{
     prev: Option<isize>,
@@ -21,7 +28,7 @@ pub struct LinkedListAnchor{
 
 #[derive(Debug)]
 pub struct LinkedList<const OFFSET:usize, T> {
-    base: *mut u8,
+    base: BaseSaver,
     head: Option<isize>,
     tail: Option<isize>,
     len: usize,
@@ -31,10 +38,9 @@ pub struct LinkedList<const OFFSET:usize, T> {
 
 impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
     
-    pub fn new(base:NonNull<T>) -> Self {
-        let base = unsafe{NonNull::new_unchecked(base.as_ptr() as *mut u8)};
+    pub fn new_local(base:*mut u8) -> Self {
         Self{
-            base: base.as_ptr(),
+            base: BaseSaver::Local(base),
             head: None,
             tail: None,
             len: 0,
@@ -44,14 +50,24 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
     
     pub fn new_absolute() -> Self {
         Self{
-            base: null_mut(),
+            base: BaseSaver::Absolute,
             head: None,
             tail: None,
             len: 0,
             phantom: PhantomData,
         }
     }
-
+    
+    pub fn new_extern(base:*mut *mut u8) -> Self {
+        Self{
+            base: BaseSaver::Extern(base),
+            head: None,
+            tail: None,
+            len: 0,
+            phantom: PhantomData,
+        }
+    }
+    
     pub fn insert(&mut self, mut memory:NonNull<T>, value:T) -> Result<(), ()> {
         let memory_mut = unsafe{memory.as_mut()};
         *memory_mut = value;
@@ -73,7 +89,8 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
         
         match self.tail {
             Some(offset) => {
-                let mut pivot = unsafe{NonNull::new_unchecked(self.base.byte_offset(offset) as *mut LinkedListAnchor)};
+                let base = self.get_base();
+                let mut pivot = unsafe{NonNull::new_unchecked(base.byte_offset(offset) as *mut LinkedListAnchor)};
                 let pivot_mut = unsafe{pivot.as_mut()};
                 let ptr_diff = unsafe{anchor.byte_offset_from(pivot.as_ptr() as *mut u8)};
                 pivot_mut.next = Some(ptr_diff);
@@ -89,10 +106,6 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
         }
     }
     
-    pub fn update_base(&mut self, new_base:*mut u8) {
-        self.base = new_base;
-    }
-    
     pub fn get(&mut self, index:usize) -> Result<NonNull<T>, ()> {
         
         if self.len < index {
@@ -104,7 +117,8 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
             None => {return Err(());}
         };
         
-        let mut pivot_anchor = unsafe{self.base.byte_offset(pivot_offset)} as *mut LinkedListAnchor;
+        let base = self.get_base();
+        let mut pivot_anchor = unsafe{base.byte_offset(pivot_offset)} as *mut LinkedListAnchor;
         let mut pivot_anchor_mut = unsafe{pivot_anchor.as_mut().expect("should be pointing to a node")};
         
         for _ in 0..index {
@@ -114,12 +128,13 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
         }
         Ok(NonNull::new(self.node_from_anchor(pivot_anchor)).expect("should be pointing to a node"))
     }
-    
 
     pub fn unlink(&mut self, node:NonNull<T>) {
         
         let anchor = self.anchor_from_node(node.as_ptr());
         let anchor_mut = unsafe{NonNull::new_unchecked(anchor).as_mut()};
+        let base = self.get_base();
+        
         match (anchor_mut.prev, anchor_mut.next) {
             (Some(prev_offset), Some(next_offset)) => {
                 let prev_mut = unsafe{NonNull::new_unchecked(anchor.byte_offset(prev_offset)).as_mut()};
@@ -134,7 +149,7 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
                 let prev = unsafe{anchor.byte_offset(prev_offset)};
                 let prev_mut = unsafe{NonNull::new_unchecked(prev).as_mut()};
                 prev_mut.next = None;
-                self.tail = unsafe{Some(prev.byte_offset_from(self.base))};
+                self.tail = unsafe{Some(prev.byte_offset_from(base))};
                 *anchor_mut = LinkedListAnchor::default();
                 
             }
@@ -142,7 +157,7 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
                 let next = unsafe{anchor.byte_offset(next_offset)};
                 let next_mut = unsafe{NonNull::new_unchecked(next).as_mut()};
                 next_mut.prev = None;
-                self.head = unsafe{Some(next.byte_offset_from(self.base))};
+                self.head = unsafe{Some(next.byte_offset_from(base))};
                 *anchor_mut = LinkedListAnchor::default();
             }
             (None, None) => {
@@ -156,23 +171,56 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
         self.len -= 1;
     }
     
+    
+    pub fn update_base(&mut self, new_address:*mut u8) -> Result<(), ()> {
+        use BaseSaver::*;
+        match &mut self.base {
+            Absolute | Extern(_) => {Err(())}
+            Local(holder) => {
+                *holder = new_address;
+                Ok(())
+            }
+        }
+    }
+    
+    pub fn update_base_holder(&mut self, new_holder:*mut *mut u8) -> Result<(), ()> {
+        use BaseSaver::*;
+        match &mut self.base {
+            Absolute | Local(_) => {Err(())}
+            Extern(holder) => {
+                *holder = new_holder;
+                Ok(())
+            }
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
     
     fn rel_from_abs(&self, address:*mut LinkedListAnchor) -> isize {
-        unsafe{address.byte_offset_from(self.base)}
-        
+        let base = self.get_base();
+        unsafe{address.byte_offset_from(base)}
     }
     
     fn anchor_from_node(&self, node:*const T) -> *mut LinkedListAnchor {
         (unsafe{node.byte_sub(OFFSET)}) as *mut LinkedListAnchor
     }
     
-    
     fn node_from_anchor(&self, node:*const LinkedListAnchor) -> *mut T {
         (unsafe{node.byte_add(OFFSET)}) as *mut T
     }
     
+    fn get_base(&self) -> *mut u8 {
+        use BaseSaver::*;
+        match self.base {
+            Absolute => null_mut(),
+            Local(holder) => holder,
+            Extern(holder) => unsafe{holder.as_ref().expect("should have base")}.clone(),
+        }
+    }
+    
+    
 }
+
 
