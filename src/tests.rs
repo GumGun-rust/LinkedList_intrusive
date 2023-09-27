@@ -10,22 +10,16 @@ struct TestStruct {
     anchor:LinkedListAnchor,
 }
 
-
 #[test]
 fn test_extern() {
     const OFFSET:usize = memoffset::offset_of!(TestStruct, anchor);
     let mut allocator = dyn_array::Array::<TestStruct>::new().unwrap();
-    
-    //let base = allocator.base().as_ptr() as *const *mut u8;
-    
     let mut address = allocator.base().as_ptr() as *mut u8;
     let address_ptr = std::ptr::addr_of_mut!(address);
     
     
     let mut holder:LinkedList<OFFSET, TestStruct> = LinkedList::new_extern(address_ptr);
-    
     println!("{address:?}");
-    
     for index in 0..128 {
         let (new_base, memory) = allocator.allocate().unwrap();
         match new_base {
@@ -61,18 +55,44 @@ fn test_extern() {
         holder.unlink(node);
     }
     
-    /*
-    let (new_base, memory) = allocator.allocate().unwrap();
-    let _ = holder.insert(memory, TestStruct{value:2, anchor:LinkedListAnchor::default()});
-    let (new_base, memory) = allocator.allocate().unwrap();
-    let _ = holder.insert(memory, TestStruct{value:3, anchor:LinkedListAnchor::default()});
-    let (new_base, memory) = allocator.allocate().unwrap();
-    let _ = holder.insert(memory, TestStruct{value:4, anchor:LinkedListAnchor::default()});
-    */
+    //todo!("\n{holder:#?}");
+}
+
+
+
+#[test]
+fn test_extern_iter() {
+    const OFFSET:usize = memoffset::offset_of!(TestStruct, anchor);
+    let mut allocator = dyn_array::Array::<TestStruct>::new().unwrap();
+    let mut address = allocator.base().as_ptr() as *mut u8;
+    let address_ptr = std::ptr::addr_of_mut!(address);
     
-    todo!("\n{holder:#?}");
-    /*
-    */
+    
+    let mut holder:LinkedList<OFFSET, TestStruct> = LinkedList::new_extern(address_ptr);
+    
+    println!("{address:?}");
+    
+    for index in 0..10 {
+        let (new_base, memory) = allocator.allocate().unwrap();
+        match new_base {
+            Some(new_base) => {
+                address = new_base as *mut u8;
+                dbg!(address);
+                let _ = holder.insert(memory, TestStruct{value:index, anchor:LinkedListAnchor::default()});
+            }
+            None => {
+                let _ = holder.insert(memory, TestStruct{value:index, anchor:LinkedListAnchor::default()});
+            }
+        }
+    }
+    
+    for (elem, index) in holder.iter_mut().zip(0..10) {
+        let elem_ref = unsafe{elem.as_ref().unwrap()};
+        assert!(elem_ref.value == index);
+        dbg!(elem_ref);
+    }
+    
+    //todo!("\n{holder:#?}");
 }
 
 /*

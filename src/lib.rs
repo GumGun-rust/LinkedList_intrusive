@@ -4,6 +4,8 @@
 #[cfg(test)]
 mod tests;
 
+mod iter;
+
 
 use core::{
     ptr::{
@@ -112,21 +114,21 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
             return Err(());
         }
         
-        let mut pivot_offset = match self.head { 
-            Some(offset) => {offset}
-            None => {return Err(());}
-        };
-        
-        let base = self.get_base();
-        let mut pivot_anchor = unsafe{base.byte_offset(pivot_offset)} as *mut LinkedListAnchor;
+        let mut pivot_anchor = self.get_first().ok_or(())?;
         let mut pivot_anchor_mut = unsafe{pivot_anchor.as_mut().expect("should be pointing to a node")};
         
         for _ in 0..index {
-            pivot_offset = pivot_anchor_mut.next.expect("should be at least index size long to arrive to this point");
+            let pivot_offset = pivot_anchor_mut.next.expect("should be at least index size long to arrive to this point");
             pivot_anchor = unsafe{pivot_anchor.byte_offset(pivot_offset)};
             pivot_anchor_mut = unsafe{pivot_anchor.as_mut().expect("should be pointing to a node")};
         }
         Ok(NonNull::new(self.node_from_anchor(pivot_anchor)).expect("should be pointing to a node"))
+    }
+    
+    fn get_first(&mut self) -> Option<*mut LinkedListAnchor> {
+        let base = self.get_base();
+        let pivot_offset = self.head?;
+        Some(unsafe{base.byte_offset(pivot_offset)} as *mut LinkedListAnchor)
     }
 
     pub fn unlink(&mut self, node:NonNull<T>) {
@@ -221,6 +223,9 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
     }
     
     
+    pub fn iter_mut(&mut self) -> iter::IterMut<OFFSET, T> {
+        iter::IterMut::new(self)
+    }
 }
 
 
