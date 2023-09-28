@@ -136,7 +136,7 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
         Ok(NonNull::new(self.node_from_anchor(pivot_anchor)).expect("should be pointing to a node"))
     }
     
-    fn get_first(&mut self) -> Option<*mut LinkedListAnchor> {
+    fn get_first(&self) -> Option<*mut LinkedListAnchor> {
         let base = self.get_base();
         let pivot_offset = self.head?;
         Some(unsafe{base.byte_offset(pivot_offset)} as *mut LinkedListAnchor)
@@ -233,9 +233,12 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
         }
     }
     
-    
     pub fn iter_mut(&mut self) -> iter::IterMut<OFFSET, T> {
         iter::IterMut::new(self)
+    }
+    
+    pub fn iter(&self) -> iter::Iter<OFFSET, T> {
+        iter::Iter::new(self)
     }
 }
 
