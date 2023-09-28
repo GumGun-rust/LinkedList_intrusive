@@ -70,6 +70,17 @@ impl<const OFFSET:usize, T> LinkedList<OFFSET, T> {
         }
     }
     
+    pub fn remplaze_new_extern(&mut self, base:*mut *mut u8) {
+        *self = Self{
+            base: BaseSaver::Extern(base),
+            head: None,
+            tail: None,
+            len: 0,
+            phantom: PhantomData,
+        }
+    }
+    
+    
     pub fn insert(&mut self, mut memory:NonNull<T>, value:T) -> Result<(), ()> {
         let memory_mut = unsafe{memory.as_mut()};
         *memory_mut = value;
